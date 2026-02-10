@@ -1,20 +1,25 @@
-import { QUESTION_BANK } from '../data/questionBank.js';
+import { assembleEncounter } from './encounterAssembler.js';
 
-function selectQuestions(node, previousErrors = 0) {
-  const targetDifficulty = Math.max(1, Math.min(5, node.difficultyTier + (previousErrors > 0 ? -1 : 0)));
-  const primary = QUESTION_BANK.filter((q) => q.domain === node.primaryDomain && q.difficulty <= targetDifficulty + 1);
-  const secondary = QUESTION_BANK.filter((q) => node.secondaryDomains.includes(q.domain));
-  const candidates = [...primary, ...secondary];
-  return candidates.slice(0, node.encounterLength);
-}
+export function launchEncounter(node, profile, sessionSeed = Date.now()) {
+  const recentErrorTypes = (profile.recentErrorTypes || []).slice(-5);
+  const assembled = assembleEncounter({
+    primaryDomain: node.primaryDomain,
+    secondaryDomains: node.secondaryDomains,
+    difficultyBand: node.dynamicDifficulty || node.difficultyTier,
+    nodeModifiers: node.nodeModifiers || {},
+    patientMix: node.patientMix,
+    recentErrorTypes,
+    seed: sessionSeed + node.nodeId.length + node.primaryDomain.length,
+    encounterLength: node.encounterLength,
+  });
 
-export function launchEncounter(node, state) {
-  const questions = selectQuestions(node, state.recentFailures);
   return {
     node,
     currentIndex: 0,
-    questions,
+    questions: assembled.questions,
     answers: [],
+    momentum: { correctStreak: 0, incorrectStreak: 0 },
+    encounterMeta: assembled.encounterMeta,
   };
 }
 
@@ -26,5 +31,7 @@ export function scoreAnswer(question, selectedIndex) {
     errorType: correct ? null : question.errorType,
     domain: question.domain,
     clinicalJudgment: question.clinicalJudgment,
+    interactionType: question.interactionType,
+    eventTag: question.eventTag,
   };
 }

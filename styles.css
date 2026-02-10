@@ -148,3 +148,23 @@ dialog::backdrop { background: rgb(0 0 0 / 0.5); }
   0%, 100% { opacity: 0.88; }
   50% { opacity: 1; }
 }
+
+.row-actions { display:flex; gap:.4rem; }
+
+.node .fog {
+  position: absolute;
+  inset: -6px;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgb(255 255 255 / 0.06), transparent 70%);
+}
+
+.node.risk-low { box-shadow: 0 0 0 3px rgb(95 211 141 / 0.18); }
+.node.risk-moderate { box-shadow: 0 0 0 3px rgb(242 201 91 / 0.22); }
+.node.risk-high { box-shadow: 0 0 0 4px rgb(239 107 115 / 0.28); }
+
+.event-note {
+  border-left: 3px solid var(--warn);
+  background: rgb(242 201 91 / 0.12);
+  padding: .4rem .5rem;
+  border-radius: 6px;
+}

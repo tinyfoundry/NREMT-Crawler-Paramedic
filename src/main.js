@@ -5,27 +5,43 @@ import { loadState, refreshNodeStates, saveState } from './game/state.js';
 import { calculateReadiness, updateDomainScore } from './game/readiness.js';
 import { startIntroFlow, clearIntroState } from './ui/introScene.js';
 import { renderArchetypeDialog, renderEncounterUI, renderMap, renderOutcome } from './ui/render.js';
+import {
+  applyEncounterConsequences,
+  enrichNodesWithMapSystems,
+  loadDistrictState,
+  loadNodeModifiers,
+  saveDistrictState,
+} from './game/mapSystem.js';
+import { createSessionSeed } from './game/modifiers.js';
 
 let state = loadState();
 let encounter = null;
 let stability = createStability();
 let acceptingInput = true;
+const sessionSeed = createSessionSeed();
+
+function recalcWorld() {
+  state.readiness = calculateReadiness(state.profile, state.profile.mode);
+  const baseNodes = refreshNodeStates(state.profile, state.readiness, { recoveryNodes: state.profile.recoveryNodes });
+  state.nodeModifiers = loadNodeModifiers(baseNodes);
+  state.nodes = enrichNodesWithMapSystems(baseNodes, state.districtState, state.nodeModifiers);
+}
 
 function init() {
+  state.districtState = loadDistrictState();
+
   startIntroFlow({
     initialArchetypeId: state.profile.archetypeId,
     onComplete: ({ selectedArchetype }) => {
       state.profile.archetypeId = selectedArchetype;
-      state.readiness = calculateReadiness(state.profile, state.profile.mode);
-      state.nodes = refreshNodeStates(state.profile, state.readiness);
-      saveState(state);
+      recalcWorld();
+      persistState();
       initializeAppUI();
     },
   });
 }
 
 function initializeAppUI() {
-  bindModeControls();
   bindSettingsControls();
   renderMap(state, startNodeEncounter);
 
@@ -33,30 +49,6 @@ function initializeAppUI() {
     state.profile.archetypeId = archetypeId;
     persistAndRefresh();
   });
-
-  updateFinalShiftButton();
-}
-
-function bindModeControls() {
-  const modeSelect = document.querySelector('#mode-select');
-  const finalShiftBtn = document.querySelector('#start-final-shift');
-
-  if (modeSelect) {
-    modeSelect.value = state.profile.mode;
-    modeSelect.addEventListener('change', () => {
-      state.profile.mode = modeSelect.value;
-      persistAndRefresh();
-    });
-  }
-
-  if (finalShiftBtn && modeSelect) {
-    finalShiftBtn.addEventListener('click', () => {
-      if (state.readiness < 85) return;
-      state.profile.mode = 'final-shift';
-      modeSelect.value = 'final-shift';
-      persistAndRefresh();
-    });
-  }
 }
 
 function bindSettingsControls() {
@@ -69,10 +61,27 @@ function bindSettingsControls() {
 }
 
 function startNodeEncounter(node) {
-  encounter = launchEncounter(node, state.profile);
+  encounter = launchEncounter(node, state.profile, sessionSeed);
   stability = createStability();
   acceptingInput = true;
   renderEncounterUI(encounter, stability, handleAnswer);
+}
+
+function applyMomentum(result) {
+  if (result.correct) {
+    encounter.momentum.correctStreak += 1;
+    encounter.momentum.incorrectStreak = 0;
+    if (encounter.momentum.correctStreak >= 2) {
+      stability = {
+        airway: Math.min(100, stability.airway + 4),
+        circulation: Math.min(100, stability.circulation + 4),
+        neuro: Math.min(100, stability.neuro + 4),
+      };
+    }
+  } else {
+    encounter.momentum.incorrectStreak += 1;
+    encounter.momentum.correctStreak = 0;
+  }
 }
 
 function handleAnswer(selectedIndex) {
@@ -82,10 +91,14 @@ function handleAnswer(selectedIndex) {
   const question = encounter.questions[encounter.currentIndex];
   const result = scoreAnswer(question, selectedIndex);
   encounter.answers.push(result);
+  applyMomentum(result);
 
   if (!result.correct) {
     const arch = ARCHETYPES.find((a) => a.id === state.profile.archetypeId);
-    stability = applyErrorToStability(stability, result.errorType, arch?.stabilityTolerance || 1);
+    const streakPenalty = encounter.momentum.incorrectStreak >= 2 ? 1.15 : 1;
+    stability = applyErrorToStability(stability, result.errorType, (arch?.stabilityTolerance || 1) * streakPenalty);
+
+    state.profile.recentErrorTypes = [...state.profile.recentErrorTypes, result.errorType].slice(-8);
 
     if (result.clinicalJudgment) {
       state.profile.clinicalJudgmentErrors += 1;
@@ -104,7 +117,6 @@ function handleAnswer(selectedIndex) {
   );
 
   const feedback = result.correct ? `Correct. ${result.rationale}` : `Not correct. ${result.rationale}`;
-
   renderEncounterUI(encounter, stability, handleAnswer, feedback);
 
   window.setTimeout(() => {
@@ -128,12 +140,24 @@ function handleAnswer(selectedIndex) {
   }, 800);
 }
 
+function unlockRecoveryNode(failedNode) {
+  const availableRecovery = state.nodes.find(
+    (node) => node.district === failedNode.district && node.nodeType === 'standard' && !state.profile.completedNodes.includes(node.nodeId),
+  );
+
+  if (availableRecovery && !state.profile.recoveryNodes.includes(availableRecovery.nodeId)) {
+    state.profile.recoveryNodes.push(availableRecovery.nodeId);
+    return availableRecovery.nodeId;
+  }
+  return null;
+}
+
 function completeEncounter(success) {
   const node = encounter.node;
   const arch = ARCHETYPES.find((a) => a.id === state.profile.archetypeId);
-  const modifier = arch?.xpModifiers[node.primaryDomain] || 1;
-  const bonus = success && state.profile.recentFailures > 0 ? 1.1 : 1;
-  const xpAward = Math.round(node.rewards.xp * modifier * bonus * (success ? 1 : 0.35));
+  const streakBonus = encounter.momentum.correctStreak >= 2 ? 1.15 : 1;
+  const modifier = (arch?.xpModifiers[node.primaryDomain] || 1) * (node.rewardMultiplier || 1) * streakBonus;
+  const xpAward = Math.round(node.rewards.xp * modifier * (success ? 1 : 0.35));
 
   state.profile.xp += xpAward;
 
@@ -151,46 +175,39 @@ function completeEncounter(success) {
     state.profile.recentFailures = Math.max(0, state.profile.recentFailures - 1);
   }
 
-  state.readiness = calculateReadiness(state.profile, state.profile.mode);
-  state.nodes = refreshNodeStates(state.profile, state.readiness);
-  saveState(state);
+  state.districtState = applyEncounterConsequences({ districtState: state.districtState, node, success });
+  saveDistrictState(state.districtState);
 
-  const unlocked = state.nodes.filter(
-    (entry) => entry.completionState === 'available' && !state.profile.completedNodes.includes(entry.nodeId),
-  );
+  const recoveryNodeId = success ? null : unlockRecoveryNode(node);
+
+  recalcWorld();
+  persistState();
 
   renderOutcome({
     success,
     xp: xpAward,
     note: success
-      ? 'District readiness improved. Continue reinforcing weak districts.'
-      : 'Review rationale and reassessment priorities before retrying.',
-    unlockNote: unlocked.length
-      ? `Available nodes: ${unlocked
-          .slice(0, 4)
-          .map((entry) => entry.nodeId)
-          .join(', ')}`
-      : 'No new nodes unlocked yet.',
+      ? 'District stability improved. Continue reinforcing weak sectors.'
+      : 'System stress increased in adjacent districts. Review rationale before reattempt.',
+    systemNote: recoveryNodeId
+      ? `Recovery path unlocked: ${recoveryNodeId}`
+      : success
+        ? 'Momentum bonus applied where appropriate.'
+        : 'No new recovery path unlocked.',
   });
 
   renderMap(state, startNodeEncounter);
-  updateFinalShiftButton();
   encounter = null;
 }
 
-function updateFinalShiftButton() {
-  const btn = document.querySelector('#start-final-shift');
-  if (!btn) return;
-  btn.disabled = state.readiness < 85;
-  btn.textContent = state.readiness >= 85 ? 'Start Final Shift (Unlocked)' : 'Start Final Shift (Locked)';
+function persistState() {
+  saveState(state);
 }
 
 function persistAndRefresh() {
-  state.readiness = calculateReadiness(state.profile, state.profile.mode);
-  state.nodes = refreshNodeStates(state.profile, state.readiness);
-  saveState(state);
+  recalcWorld();
+  persistState();
   renderMap(state, startNodeEncounter);
-  updateFinalShiftButton();
 }
 
 init();

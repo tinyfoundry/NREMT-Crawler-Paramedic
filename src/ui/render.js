@@ -1,6 +1,21 @@
 import { ARCHETYPES } from '../data/archetypes.js';
 import { calculateDistrictHeat, heatColor } from '../game/heat.js';
 
+function interactionPrompt(type) {
+  if (type === 'prioritization') return 'Prioritize life threats before selecting an intervention.';
+  if (type === 'midVitalsUpdate') return 'Monitor for a mid-call vitals update during decision-making.';
+  if (type === 'reassessmentPrompt') return 'A reassessment checkpoint is expected before final commitment.';
+  if (type === 'timePressured') return 'Time pressure is active. Commit decisively.';
+  return 'Select the best clinical action.';
+}
+
+function eventText(tag) {
+  if (tag === 'radioTraffic') return 'Radio traffic update: additional unit delays reported.';
+  if (tag === 'patientDeterioration') return 'Patient status update: signs of deterioration are emerging.';
+  if (tag === 'sceneComplication') return 'Scene complication: environmental factors are worsening access.';
+  return '';
+}
+
 export function renderMap(state, onSelectNode) {
   const mapEl = document.querySelector('#district-map');
   const legendEl = document.querySelector('#node-legend');
@@ -10,20 +25,22 @@ export function renderMap(state, onSelectNode) {
 
   state.nodes.forEach((node) => {
     const btn = document.createElement('button');
-    btn.className = `node ${node.nodeType} ${node.completionState}`;
+    btn.className = `node ${node.nodeType} ${node.completionState} risk-${node.riskLevel || 'moderate'}`;
     btn.style.left = `${node.pos.x}%`;
     btn.style.top = `${node.pos.y}%`;
     btn.style.background = heatColor(heat[node.district] ?? 0.5);
-    btn.title = `${node.nodeId} • ${node.primaryDomain} • ${node.completionState}`;
+    btn.title = `${node.nodeId} • ${node.primaryDomain} • Risk ${node.riskLevel || 'moderate'}`;
     btn.disabled = node.completionState === 'locked';
+    btn.innerHTML = `<span class="fog"></span>`;
     btn.addEventListener('click', () => onSelectNode(node));
     mapEl.append(btn);
   });
 
   legendEl.innerHTML = Object.entries(heat)
-    .map(
-      ([district, value]) => `<div class="legend-item"><strong>${district}</strong><br/>Heat: ${(value * 100).toFixed(0)}%</div>`,
-    )
+    .map(([district, value]) => {
+      const d = state.districtState?.[district] || { stabilityLevel: 0, systemStress: 0, recentFailures: 0 };
+      return `<div class="legend-item"><strong>${district}</strong><br/>Heat: ${(value * 100).toFixed(0)}%<br/>Stability ${d.stabilityLevel} / Stress ${d.systemStress}</div>`;
+    })
     .join('');
 
   document.querySelector('#readiness-score').textContent = state.readiness;
@@ -47,12 +64,16 @@ export function renderArchetypeDialog(state, onSave) {
   };
 }
 
-export function renderEncounterUI(model, stability, onAnswer) {
+export function renderEncounterUI(model, stability, onAnswer, feedback = null) {
   const shell = document.querySelector('#encounter-shell');
   const q = model.questions[model.currentIndex];
   if (!q) return;
+
+  const eventLine = eventText(q.eventTag);
+
   shell.innerHTML = `
     <h3>${model.node.nodeId} • ${model.node.nodeType.toUpperCase()} ENCOUNTER</h3>
+    <p class="subtle">Interaction: ${q.interactionType}</p>
     <div class="meters">
       ${meter('Airway', stability.airway)}
       ${meter('Circulation', stability.circulation)}
@@ -60,9 +81,10 @@ export function renderEncounterUI(model, stability, onAnswer) {
     </div>
     <div class="question-card">
       <p><strong>Question ${model.currentIndex + 1} / ${model.questions.length}</strong></p>
+      ${eventLine ? `<p class="event-note">${eventLine}</p>` : ''}
       <p>${q.stem}</p>
       ${q.options.map((option, i) => `<button class="option" data-index="${i}">${option}</button>`).join('')}
-      <div id="feedback" class="feedback">Select the best clinical action.</div>
+      <div id="feedback" class="feedback">${feedback || interactionPrompt(q.interactionType)}</div>
     </div>
   `;
 
@@ -82,5 +104,6 @@ export function renderOutcome(outcome) {
     <p>${outcome.success ? 'Patient stabilized and transfer accepted.' : 'Patient deteriorated. Outcome unsuccessful.'}</p>
     <p>XP Awarded: ${outcome.xp}</p>
     <p>${outcome.note}</p>
+    <p>${outcome.systemNote || ''}</p>
   `;
 }

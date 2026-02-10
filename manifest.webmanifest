@@ -1,0 +1,9 @@
+{
+  "name": "NREMT Paramedic RPG Prep",
+  "short_name": "ParamedicRPG",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0e182f",
+  "theme_color": "#17345d",
+  "icons": []
+}

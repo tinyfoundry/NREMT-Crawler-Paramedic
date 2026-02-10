@@ -1,1 +1,61 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>NREMT Paramedic RPG Prep</title>
+    <link rel="stylesheet" href="styles.css" />
+    <link rel="manifest" href="manifest.webmanifest" />
+  </head>
+  <body>
+    <div id="app" class="app-shell">
+      <header class="top-bar card">
+        <div>
+          <h1>Jacksonville Final Shift</h1>
+          <p class="subtle">Paramedic Cognitive Exam RPG Layer</p>
+        </div>
+        <div class="readiness-panel">
+          <span>Readiness</span>
+          <strong id="readiness-score">0</strong>
+        </div>
+      </header>
 
+      <main class="layout">
+        <section class="map-panel card">
+          <div class="panel-heading">
+            <h2>District Map</h2>
+            <div class="row-actions">
+              <button id="open-archetype" class="secondary">Archetype</button>
+              <button id="replay-intro" class="secondary">Replay Intro</button>
+            </div>
+          </div>
+          <div id="district-map" class="district-map"></div>
+          <div id="node-legend" class="legend"></div>
+        </section>
+
+        <section class="encounter-panel card">
+          <div id="encounter-shell" class="encounter-shell">
+            <div class="placeholder">
+              <h3>Select a map node</h3>
+              <p>Launch an encounter to route through the existing question engine workflow.</p>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <dialog id="archetype-dialog">
+      <form method="dialog" class="dialog-form">
+        <h3>Select Paramedic Archetype</h3>
+        <div id="archetype-options"></div>
+        <menu>
+          <button value="cancel">Cancel</button>
+          <button id="save-archetype" value="default">Save</button>
+        </menu>
+      </form>
+    </dialog>
+
+    <script type="module" src="src/main.js"></script>
+    <script>if ("serviceWorker" in navigator) { navigator.serviceWorker.register("/sw.js"); }</script>
+  </body>
+</html>

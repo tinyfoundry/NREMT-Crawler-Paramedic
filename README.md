@@ -70,6 +70,20 @@ Mode factors:
 - Exam: `1.0`
 - Final Shift: `1.15`
 
+
+## Narrative Onboarding Layer
+
+A first-load intro sequence now frames the exam experience before entering the map:
+- Scene 1: **The Night Before**
+- Scene 2: **System Boot**
+- Scene 3: **Choose Your Paramedic Path**
+- Scene 4: **Enter the City**
+
+Behavior:
+- Runs once by default and saves `introCompleted` + `selectedArchetype` in localStorage.
+- Can be replayed with the **Replay Intro** button in the map header.
+- Text and skip behavior are configurable in `src/ui/introScene.js` comments.
+
 ## Run
 
 Since this is static front-end code:

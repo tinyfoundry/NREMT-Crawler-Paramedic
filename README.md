@@ -1,76 +1,43 @@
-# NREMT Paramedic RPG Layer (Front-End Only)
+# NREMT Paramedic Prep Engine (Static Readiness Engine)
 
-This repository extends an NREMT-style question workflow with a **2D, node-based Jacksonville-inspired map game layer**.
+A fully static NREMT-style paramedic prep app focused on readiness confidence, not raw quiz scores.
 
-## Extension Plan
+## What this app now does
+- 500-question original JSON bank (`data/questions.seed.json`)
+- Study mode (instant coaching) and Exam mode (delayed feedback, 3:30 timer)
+- Continuous **Test Readiness Score (0-100)** weighted by:
+  - Paramedic-plan weighting with Clinical Judgment integration (Airway 10, Cardiology 12, Trauma 8, Medical/OB/GYN+Pharm 29, Ops 10, Clinical Judgment 34)
+  - recent performance decay
+  - exam mode impact > study mode impact
+  - difficulty solved correctly
+  - consistency and repeated error penalties
+  - 85% adult / 15% pediatric calibration
+- Domain readiness meters with status labels:
+  - Below Passing, Borderline, Passing, Strong, Exam-Ready
+- Area-specific practice flows per domain with tips, pitfalls, and NREMT coaching
+- Error-pattern coaching (priority, scope, delayed intervention, assessment order)
+- Gamification aligned to learning quality (difficulty-weighted XP, level titles, badges)
+- localStorage persistence and session resume
 
-### What stays from the baseline engine concept
-- Question-first encounter flow and rationale usage.
-- Existing question schema and answer scoring behavior.
-- Readiness score and localStorage persistence.
+## Public inspiration sources
+See `sources.md`.
 
-### What is added on top
-- Dynamic map session system with per-node modifiers.
-- District-level stability/stress/failure state that influences risk and rewards.
-- Procedural encounter assembly wrapper around existing questions.
-- Interaction variety tags and surprise event messaging.
-- Momentum and consequence systems for replayability.
-
-## New System Modules
-
-- `src/game/modifiers.js`: session seed, deterministic RNG, and modifier impact math.
-- `src/game/mapSystem.js`: district state persistence, node modifier assignment, dynamic risk/difficulty, failure consequences.
-- `src/game/encounterAssembler.js`: `assembleEncounter(config)` procedural builder with weakness bias and wildcard injection.
-
-## Procedural Rules Overview
-
-### Map / District System
-Each node receives daily/session modifiers:
-- `highCallVolume`
-- `limitedResources`
-- `pediatricSpike`
-- `weatherImpact`
-- `equipmentFailure`
-
-District state tracks:
-- `stabilityLevel`
-- `systemStress`
-- `recentFailures`
-
-These values influence node risk, dynamic encounter difficulty, and reward multipliers.
-
-### Encounter Assembly
-`assembleEncounter(config)` always:
-- Includes primary domain coverage.
-- Biases toward recent error-type weaknesses.
-- Injects wildcard questions based on modifiers.
-- Randomizes question order/interaction style per seeded run.
-
-### Interaction Variety
-Questions can be wrapped with interaction tags:
-- `prioritization`
-- `midVitalsUpdate`
-- `reassessmentPrompt`
-- `timePressured`
-- `standard`
-
-Surprise event banners:
-- Radio traffic update
-- Patient deterioration
-- Scene complication
-
-### Pressure & Consequences
-- Correct streaks can add stability buffer and XP momentum bonus.
-- Incorrect streaks increase deterioration penalties.
-- Encounter failure updates district stress and may unlock recovery nodes.
-
-## Intro Layer
-A first-load narrative onboarding sequence is implemented in `src/ui/introScene.js` and can be replayed with the **Replay Intro** button.
-
-## Run
-
+## Run locally
 ```bash
-python3 -m http.server 4173
+pnpm install
+pnpm dev
 ```
 
-Open `http://localhost:4173`.
+## Build static output
+```bash
+pnpm build
+```
+
+## Deploy
+- GitHub Pages: publish static `out/`
+- Vercel: build command `pnpm build`, output `out`
+
+## Safe question contribution rules
+- Keep all question stems/rationales original
+- Use public references for pattern inspiration only
+- Never copy text from proprietary or gated test banks
